@@ -7,6 +7,12 @@
 \alias{create_document.cosmos_container}
 \alias{list_documents}
 \alias{list_documents.cosmos_container}
+\alias{replace_document}
+\alias{replace_document.cosmos_container}
+\alias{replace_document.cosmos_document}
+\alias{update_document}
+\alias{update_document.cosmos_container}
+\alias{update_document.cosmos_document}
 \alias{delete_document}
 \alias{delete_document.cosmos_container}
 \alias{delete_document.cosmos_document}
@@ -29,6 +35,18 @@ list_documents(object, ...)
   ...
 )
 
+replace_document(object, ...)
+
+\method{replace_document}{cosmos_container}(object, id, partition_key, data, headers = list(), ...)
+
+\method{replace_document}{cosmos_document}(object, data, ...)
+
+update_document(object, ...)
+
+\method{update_document}{cosmos_container}(object, id, partition_key, data, headers = list(), ...)
+
+\method{update_document}{cosmos_document}(object, data, ...)
+
 delete_document(object, ...)
 
 \method{delete_document}{cosmos_container}(
@@ -45,7 +63,7 @@ delete_document(object, ...)
 \arguments{
 \item{object}{A Cosmos DB container object, as obtained by \code{get_cosmos_container} or \code{create_cosmos_container}.}
 
-\item{data}{For \code{create_document}, the document data. This can be either a string containing JSON text, or a (possibly nested) list containing the parsed JSON.}
+\item{data}{For \code{create_document}, the document data. This can be either a string containing JSON text, or a (possibly nested) list containing the parsed JSON. For \code{replace_document}, the complete document data to replace with. For \code{update_document}, a named list of field-value pairs to update (these will be converted to PATCH operations).}
 
 \item{headers, ...}{Optional arguments passed to lower-level functions.}
 
@@ -60,7 +78,7 @@ delete_document(object, ...)
 \item{confirm}{For \code{delete_cosmos_container}, whether to ask for confirmation before deleting.}
 }
 \value{
-\code{get_document} and \code{create_document} return an object of S3 class \code{cosmos_document}. The actual document contents can be found in the \code{data} component of this object.
+\code{get_document}, \code{create_document}, \code{update_document}, and \code{replace_document} return an object of S3 class \code{cosmos_document}. The actual document contents can be found in the \code{data} component of this object.
 
 \code{list_documents} returns a list of \code{cosmos_document} objects if \code{as_data_frame} is FALSE, and a data frame otherwise.
 }
@@ -69,6 +87,8 @@ Methods for working with Azure Cosmos DB documents
 }
 \details{
 These are low-level functions for working with individual documents in a Cosmos DB container. In most cases you will want to use \link{query_documents} to issue queries against the container, or \link{bulk_import} and \link{bulk_delete} to create and delete documents.
+
+\code{replace_document} uses a PUT request to replace the entire document, while \code{update_document} uses a PATCH request to perform a partial update of the document. The \code{update_document} function converts the provided data into Cosmos DB PATCH operations (using the "set" operation for each field).
 }
 \examples{
 \dontrun{
@@ -87,6 +107,15 @@ list_documents(cont, as_data_frame=TRUE)
 # a single document
 doc <- get_document(cont, "mydocumentid")
 doc$data
+
+# update a document (partial update with PATCH)
+# only the specified fields will be updated
+update_document(cont, "mydocumentid", partition_key="mykey", 
+                data=list(field1="newvalue", field2="anothervalue"))
+
+# replace a document (full replacement with PUT)
+replace_document(cont, "mydocumentid", partition_key="mykey",
+                 data=list(id="mydocumentid", field1="value1", field2="value2"))
 
 delete_document(doc)
 

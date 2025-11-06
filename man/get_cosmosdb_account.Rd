@@ -8,9 +8,11 @@
 Method for the \link[AzureRMR:az_resource_group]{AzureRMR::az_resource_group} class.
 }
 \section{Usage}{
-\preformatted{get_cosmosdb_account(name)
+
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{get_cosmosdb_account(name)
 list_cosmosdb_accounts()
-}
+}\if{html}{\out{</div>}}
 }
 
 \section{Arguments}{

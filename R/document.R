@@ -3,15 +3,17 @@
 #' @param object A Cosmos DB container object, as obtained by `get_cosmos_container` or `create_cosmos_container`.
 #' @param id The document ID.
 #' @param partition_key For `get_document` and `delete_document`, the value of the partition key for the desired document. For `list_documents`, restrict the returned list only to documents with this key value.
-#' @param data For `create_document`, the document data. This can be either a string containing JSON text, or a (possibly nested) list containing the parsed JSON.
+#' @param data For `create_document`, the document data. This can be either a string containing JSON text, or a (possibly nested) list containing the parsed JSON. For `replace_document`, the complete document data to replace with. For `update_document`, a named list of field-value pairs to update (these will be converted to PATCH operations).
 #' @param metadata For `get_document` and `list_documents`, whether to include Cosmos DB document metadata in the result.
 #' @param as_data_frame For `list_documents`, whether to return a data frame or a list of Cosmos DB document objects. Note that the default value is FALSE, unlike [query_documents].
 #' @param confirm For `delete_cosmos_container`, whether to ask for confirmation before deleting.
 #' @param headers,... Optional arguments passed to lower-level functions.
 #' @details
 #' These are low-level functions for working with individual documents in a Cosmos DB container. In most cases you will want to use [query_documents] to issue queries against the container, or [bulk_import] and [bulk_delete] to create and delete documents.
+#'
+#' `replace_document` uses a PUT request to replace the entire document, while `update_document` uses a PATCH request to perform a partial update of the document. The `update_document` function converts the provided data into Cosmos DB PATCH operations (using the "set" operation for each field).
 #' @return
-#' `get_document` and `create_document` return an object of S3 class `cosmos_document`. The actual document contents can be found in the `data` component of this object.
+#' `get_document`, `create_document`, `update_document`, and `replace_document` return an object of S3 class `cosmos_document`. The actual document contents can be found in the `data` component of this object.
 #'
 #' `list_documents` returns a list of `cosmos_document` objects if `as_data_frame` is FALSE, and a data frame otherwise.
 #' @seealso
@@ -33,6 +35,15 @@
 #' # a single document
 #' doc <- get_document(cont, "mydocumentid")
 #' doc$data
+#'
+#' # update a document (partial update with PATCH)
+#' # only the specified fields will be updated
+#' update_document(cont, "mydocumentid", partition_key="mykey", 
+#'                 data=list(field1="newvalue", field2="anothervalue"))
+#'
+#' # replace a document (full replacement with PUT)
+#' replace_document(cont, "mydocumentid", partition_key="mykey",
+#'                  data=list(id="mydocumentid", field1="value1", field2="value2"))
 #'
 #' delete_document(doc)
 #'
@@ -109,6 +120,108 @@ list_documents.cosmos_container <- function(object, partition_key=NULL, as_data_
 
     res <- do_cosmos_op(object, "docs", "docs", headers=headers, ...)
     get_docs(res, as_data_frame, metadata, object)
+}
+
+
+#' @rdname cosmos_document
+#' @export
+replace_document <- function(object, ...) {
+    UseMethod("replace_document")
+}
+
+#' @rdname cosmos_document
+#' @export
+replace_document.cosmos_container <- function(
+    object,
+    id,
+    partition_key,
+    data,
+    headers = list(),
+    ...
+) {
+    if(is.character(data) && jsonlite::validate(data))
+        data <- jsonlite::fromJSON(data)
+
+    # ensure id matches
+    data$id <- id
+
+    # assume only 1 partition key at most
+    if(!is.null(object$partitionKey))
+    {
+        partition_key_name <- sub("^/", "", object$partitionKey$paths)
+        if(is.null(data[[partition_key_name]]))
+            data[[partition_key_name]] <- partition_key
+        headers$`x-ms-documentdb-partitionkey` <- jsonlite::toJSON(partition_key)
+    }
+
+    data <- jsonlite::toJSON(data, auto_unbox=TRUE, null="null")
+    path <- file.path("docs", id)
+    res <- do_cosmos_op(object, path, "docs", path, headers=headers, body=data, http_verb="PUT", ...)
+    doc <- process_cosmos_response(res)
+    invisible(as_document(doc, object))
+}
+
+#' @rdname cosmos_document
+#' @export
+replace_document.cosmos_document <- function(object, data, ...) {
+    partition_key_name <- sub("^/", "", object$container$partitionKey$paths)
+    partition_key <- object$data[[partition_key_name]]
+    replace_document(object$container, object$data$id, partition_key, data, ...)
+}
+
+
+#' @rdname cosmos_document
+#' @export
+update_document <- function(object, ...) {
+    UseMethod("update_document")
+}
+
+#' @rdname cosmos_document
+#' @export
+update_document.cosmos_container <- function(
+    object,
+    id,
+    partition_key,
+    data,
+    headers = list(),
+    ...
+) {
+    if(is.character(data) && jsonlite::validate(data))
+        data <- jsonlite::fromJSON(data)
+
+    # assume only 1 partition key at most
+    if(!is.null(object$partitionKey))
+    {
+        headers$`x-ms-documentdb-partitionkey` <- jsonlite::toJSON(partition_key)
+    }
+
+    # Convert data to PATCH operations format
+    # Cosmos DB PATCH API requires operations array with op, path, value
+    operations <- lapply(names(data), function(field) {
+        list(
+            op = "set",
+            path = paste0("/", field),
+            value = data[[field]]
+        )
+    })
+    
+    patch_body <- list(operations = operations)
+    patch_json <- jsonlite::toJSON(patch_body, auto_unbox=TRUE, null="null")
+    
+    headers$`Content-Type` <- "application/json_patch+json"
+    
+    path <- file.path("docs", id)
+    res <- do_cosmos_op(object, path, "docs", path, headers=headers, body=patch_json, http_verb="PATCH", ...)
+    doc <- process_cosmos_response(res)
+    invisible(as_document(doc, object))
+}
+
+#' @rdname cosmos_document
+#' @export
+update_document.cosmos_document <- function(object, data, ...) {
+    partition_key_name <- sub("^/", "", object$container$partitionKey$paths)
+    partition_key <- object$data[[partition_key_name]]
+    update_document(object$container, object$data$id, partition_key, data, ...)
 }
 
 

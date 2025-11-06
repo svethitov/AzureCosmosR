@@ -7,7 +7,9 @@
 Method for the \link[AzureRMR:az_resource_group]{AzureRMR::az_resource_group} class.
 }
 \section{Usage}{
-\preformatted{create_cosmosdb_account(
+
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{create_cosmosdb_account(
     name,
     location = self$location,
     interface = c("sql", "cassandra", "mongo", "table", "graph"),
@@ -16,7 +18,7 @@ Method for the \link[AzureRMR:az_resource_group]{AzureRMR::az_resource_group} cl
     properties = list(),
     ...
 )
-}
+}\if{html}{\out{</div>}}
 }
 
 \section{Arguments}{

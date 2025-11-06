@@ -153,14 +153,14 @@ retry_transfer <- function(response)
     UseMethod("retry_transfer")
 }
 
-retry_transfer.error <- function(response)
-{
+#' @export
+retry_transfer.error <- function(response) {
     grepl("curl", deparse(response$call[[1]]), fixed=TRUE) &&
         !grepl("Could not resolve host", response$message, fixed=TRUE)
 }
 
-retry_transfer.response <- function(response)
-{
+#' @export
+retry_transfer.response <- function(response) {
     httr::status_code(response) == 429
 }
 
